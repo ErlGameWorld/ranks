@@ -3,7 +3,7 @@
 -export([
    start/0
    , stop/0
-   ,
+   , startWork/1
    , initRank/1                %% 创建新的排行榜
    , updateScore/3           %% 更新分数
    , updateInfo/2            %% 更新其他分数
