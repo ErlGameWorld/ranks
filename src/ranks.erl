@@ -6,7 +6,7 @@
    start/0
    , stop/0
    , startWork/1
-   , initRank/1                %% 创建新的排行榜
+   , initRank/3              %% 创建新的排行榜
    , updateScore/3           %% 更新分数
    , updateInfo/2            %% 更新其他分数
    , getRankInfo/4           %% 获取排行某页的信息
@@ -40,24 +40,29 @@ startWork(Cnt) when Cnt > 0 ->
          {error, started}
    end.
 
-initRank(RankType) ->
-   gen_srv:call(rankMgr, {mInitRank, RankType}).
+initRank(RankType, CntLimit, CntMax) ->
+   gen_srv:call(rankMgr, {mInitRank, RankType, CntLimit, CntMax}).
 
 %% 根据排行榜类型更新分数 需要根据key 分配到指定的排行榜工程进程执行
 updateScore(RankType, Key, Score) ->
    WorkName = ?ranksCfg:getV(erlang:phash2(Key, ?ranksCfg:getV(?workCnt)) + 1),
-   %% 这里就看业务层面是否需要同步更新分数了 需要根据key 分配到指定的排行榜工程进程执行
    RankPos = ?ranksCfg:getV(RankType),
-   gen_srv:cast(WorkName, {mUpdateScore, RankPos, Score}).
+   %% 这里就看业务层面是否需要同步更新分数了
+   %% 同步请求
+   %%  gen_srv:clfn(WorkName, rank_work, mUpdateScore, [Key, RankPos, Score]),
+   %% 异步请求
+   gen_srv:csfn(WorkName, rank_work, mUpdateScore, [Key, RankPos, Score]).
 
 %% 更新非排行榜分数的其他其他字段的信息 需要根据key 分配到指定的排行榜工程进程执行
 updateInfo(Key, RecordKvs) ->
    WorkName = ?ranksCfg:getV(erlang:phash2(Key, ?ranksCfg:getV(?workCnt)) + 1),
    %% 这里就看业务层面是否需要同步更新信息了
-   gen_srv:cast(WorkName, {mUpdateInfo, RecordKvs}).
+   %% 同步请求
+   %%  gen_srv:clfn(WorkName, rank_work, mUpdateInfo, [Key, RecordKvs]),
+   %% 异步请求
+   gen_srv:csfn(WorkName, rank_work, mUpdateInfo, [Key, RecordKvs]).
 
 %% 根据排行榜类型 获取指定数量 指定页的排行榜的信息 不需要在排行榜工作进程执行
 getRankInfo(RankType, Cnt, Page, PageInfo) ->
-
-   ok.
+   rankWork:mGetRankInfo(RankType, Cnt, Page, PageInfo).
 

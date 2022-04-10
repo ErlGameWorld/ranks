@@ -3,9 +3,13 @@
 
 %% 相关配置模块名
 -define(ranksCfg, ranksCfg).
+-define(ranksLimit, ranksLimit).
 
 %% 工作者数量
 -define(workCnt, workCnt).
+
+%% 公共信息字段
+-define(publicInfoPos, #etsRankRecord.publicInfo).
 
 %% 三元表达式
 -define(IIF(Cond, Ret1, Ret2), (case Cond of true -> Ret1; _ -> Ret2 end)).
@@ -21,6 +25,11 @@
    , rankTypeNScore :: term()
 }).
 
--define(RankRecordFields, record_info(fields, etsRankRecord)).
+-record(rankInfo, {
+   rank :: integer()
+   , key :: integer()
+   , publicInfo :: term()
+   , rankTypeScore :: term()
+}).
 
 -endif.
