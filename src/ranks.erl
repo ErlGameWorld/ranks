@@ -5,10 +5,10 @@
 -export([
    start/0
    , stop/0
-   , startWork/1
-   , initRank/3              %% 创建新的排行榜
-   , updateScore/3           %% 更新分数
-   , updateInfo/2            %% 更新其他分数
+   , startWork/1             %% 创建指定数量的排行榜工作者
+   , initRank/3              %% 创建新的类型排行榜
+   , updateScore/3           %% 更新某类型的排行榜分数
+   , updateInfo/2            %% 更新公共信息
    , getRankInfo/4           %% 获取排行某页的信息
 ]).
 
