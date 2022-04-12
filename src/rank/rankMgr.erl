@@ -35,7 +35,7 @@ handleCall({mInitRank, RankType, CntLimit, CntMax}, State, _FROM) ->
       _ ->
          ets:new(RankType, [ordered_set, public, named_table, {write_concurrency, auto}, {read_concurrency, true}, {decentralized_counters, false}]),
          NewState = State#{RankType => {CntLimit, CntMax}},
-         gtKvsToBeam:load(?ranksLimit, maps:to_list(NewState)),
+         rsKvsToBeam:load(?ranksLimit, maps:to_list(NewState)),
          {reply, ok, NewState}
    end;
 handleCall(_Msg, _State, _FROM) ->

@@ -25,6 +25,8 @@
    , rankTypeNScore :: term()
 }).
 
+-define(AllRankType, [rankType1Score, rankType2Score, rankTypeNScore]).
+
 -record(rankInfo, {
    rank :: integer()
    , key :: integer()

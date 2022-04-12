@@ -9,7 +9,7 @@
    , initRank/3              %% 创建新的类型排行榜
    , updateScore/3           %% 更新某类型的排行榜分数
    , updateInfo/2            %% 更新公共信息
-   , getRankInfo/4           %% 获取排行某页的信息
+   , getRankInfo/5           %% 获取排行某页的信息
 ]).
 
 start() ->
@@ -18,6 +18,7 @@ start() ->
 stop() ->
    application:stop(ranks).
 
+-spec workName(Idx :: integer()) -> atom().
 workName(Idx) ->
    binary_to_atom(<<"$rankWork_", (integer_to_binary(Idx))/binary>>).
 
@@ -30,39 +31,42 @@ fieldIdx([Field | Fields], Idx, Acc) ->
 startWork(Cnt) when Cnt > 0 ->
    case ?ranksCfg:getV(?workCnt) of
       0 ->
-         NameList = [{Idx, workName(Idx)} || Idx <- lists:seq(1, Cnt)],
+         NameList = [{Idx, workName(Idx)} || Idx <- lists:seq(0, Cnt - 1)],
          [supervisor:start_child(rankWork_sup, [WorkName]) || {_Idx, WorkName} <- NameList],
          CfgList = [{?workCnt, Cnt} | NameList],
          Fields = record_info(fields, etsRankRecord),
-         gtKvsToBeam:load(?ranksCfg, fieldIdx(Fields, 1, CfgList)),
+         rsKvsToBeam:load(?ranksCfg, fieldIdx(Fields, 2, CfgList)),
          ok;
       _Cnt ->
          {error, started}
    end.
 
+-spec initRank(RankType :: atom(), CntLimit :: non_neg_integer(), CntMax :: non_neg_integer()) -> ok | {error, atom()}.
 initRank(RankType, CntLimit, CntMax) ->
    gen_srv:call(rankMgr, {mInitRank, RankType, CntLimit, CntMax}).
 
-%% 根据排行榜类型更新分数 需要根据key 分配到指定的排行榜工程进程执行
+%% 根据排行榜类型更新分数 需要根据key 分配到指定的排行榜工程进程执行 Score 是个元组 {Score1, Score2, ..., Key}
+-spec updateScore(RankType :: atom(), Key :: term(), Score :: tuple()) -> no_return().
 updateScore(RankType, Key, Score) ->
-   WorkName = ?ranksCfg:getV(erlang:phash2(Key, ?ranksCfg:getV(?workCnt)) + 1),
-   RankPos = ?ranksCfg:getV(RankType),
+   WorkName = ?ranksCfg:getV(erlang:phash2(Key, ?ranksCfg:getV(?workCnt))),
    %% 这里就看业务层面是否需要同步更新分数了
    %% 同步请求
    %%  gen_srv:clfn(WorkName, rank_work, mUpdateScore, [Key, RankPos, Score]),
    %% 异步请求
-   gen_srv:csfn(WorkName, rank_work, mUpdateScore, [Key, RankPos, Score]).
+   gen_srv:csfn(WorkName, rankWork, mUpdateScore, [RankType, Key, Score]).
 
 %% 更新非排行榜分数的其他其他字段的信息 需要根据key 分配到指定的排行榜工程进程执行
+-spec updateInfo(Key :: term(), RecordKvs :: {non_neg_integer(), term()} | [{non_neg_integer(), term()}, ...]) -> no_return().
 updateInfo(Key, RecordKvs) ->
-   WorkName = ?ranksCfg:getV(erlang:phash2(Key, ?ranksCfg:getV(?workCnt)) + 1),
+   WorkName = ?ranksCfg:getV(erlang:phash2(Key, ?ranksCfg:getV(?workCnt))),
    %% 这里就看业务层面是否需要同步更新信息了
    %% 同步请求
    %%  gen_srv:clfn(WorkName, rank_work, mUpdateInfo, [Key, RecordKvs]),
    %% 异步请求
-   gen_srv:csfn(WorkName, rank_work, mUpdateInfo, [Key, RecordKvs]).
+   gen_srv:csfn(WorkName, rankWork, mUpdateInfo, [Key, RecordKvs]).
 
-%% 根据排行榜类型 获取指定数量 指定页的排行榜的信息 不需要在排行榜工作进程执行
-getRankInfo(RankType, Cnt, Page, PageInfo) ->
-   rankWork:mGetRankInfo(RankType, Cnt, Page, PageInfo).
+%% 根据排行榜类型 获取指定数量 指定页的排行榜的信息 不需要在排行榜工作进程执行  返回{IsOver 是否获取到所有数据, SelfRank  -1 未上榜 0 未查询自己排名 名次, RankData 排行榜数据}.
+-spec getRankInfo(RankType :: atom(), MyKey :: term(), Cnt :: non_neg_integer(), Page :: integer(), PageInfo :: binary()) -> {IsOver :: boolean(), SelfRank :: integer(), RankData :: list()}.
+getRankInfo(RankType, MyKey, Cnt, Page, PageInfo) ->
+   rankWork:mGetRankInfo(RankType, MyKey, Cnt, Page, PageInfo).
 

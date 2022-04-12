@@ -46,12 +46,12 @@ code_change(_OldVsn, State, _Extra) ->
    {ok, State}.
 %% ****************************************************** logic ********************************************************
 
-mUpdateScore(Key, RankType, Score) ->
+mUpdateScore(RankType, Key, Score) ->
    {_RankLimit, RankMax} = ?ranksLimit:getV(RankType),
    RankPos = ?ranksCfg:getV(RankType),
-   case ets:lookup(etsRankInfo, Key) of
-      [RankRecord] ->
-         OldScore = element(RankPos, RankRecord),
+   try ets:lookup_element(?etsRankInfo, Key, RankPos) of
+      OldScore ->
+
          ets:delete(RankType, OldScore),
 
          RankSize = ets:info(RankType, size),
@@ -60,42 +60,43 @@ mUpdateScore(Key, RankType, Score) ->
                FirstKey = ets:first(RankType),
                case Score > FirstKey of
                   true ->
-                     ets:insert(RankType, Score),
+                     ets:insert(RankType, {Score, Key}),
                      ets:delete(RankType, FirstKey);
                   _ ->
                      ignore
                end;
             _ ->
-               ets:insert(RankType, Score)
+               ets:insert(RankType, {Score, Key})
          end,
-         ets:update_element(etsRankInfo, Key, {RankPos, Score});
-      _ ->
-         %% 插入新的数据
-         RankSize = ets:info(RankType, size),
-         case RankSize >= RankMax of
-            true ->
-               FirstKey = ets:first(RankType),
-               case Score > FirstKey of
-                  true ->
-                     ets:insert(RankType, Score),
-                     ets:delete(RankType, FirstKey),
-                     NewRecord = #etsRankRecord{key = Key},
-                     RankRecord = setelement(RankPos, NewRecord, Score),
-                     ets:insert(etsRankInfo, RankRecord);
-                  _ ->
-                     ignore
-               end;
-            _ ->
-               ets:insert(RankType, Score),
-               NewRecord = #etsRankRecord{key = Key},
-               RankRecord = setelement(RankPos, NewRecord, Score),
-               ets:insert(etsRankInfo, RankRecord)
-         end
+         ets:update_element(?etsRankInfo, Key, {RankPos, Score})
+   catch _:_ ->
+
+      %% 插入新的数据
+      RankSize = ets:info(RankType, size),
+      case RankSize >= RankMax of
+         true ->
+            FirstKey = ets:first(RankType),
+            case Score > FirstKey of
+               true ->
+                  ets:insert(RankType, {Score, Key}),
+                  ets:delete(RankType, FirstKey),
+                  NewRecord = #etsRankRecord{key = Key},
+                  RankRecord = setelement(RankPos, NewRecord, Score),
+                  ets:insert(?etsRankInfo, RankRecord);
+               _ ->
+                  ignore
+            end;
+         _ ->
+            ets:insert(RankType, {Score, Key}),
+            NewRecord = #etsRankRecord{key = Key},
+            RankRecord = setelement(RankPos, NewRecord, Score),
+            ets:insert(?etsRankInfo, RankRecord)
+      end
    end,
    {mayReply, ok}.
 
 mUpdateInfo(Key, RecordKvs) ->
-   ets:update_element(etsRankInfo, Key, RecordKvs),
+   ets:update_element(?etsRankInfo, Key, RecordKvs),
    {mayReply, ok}.
 
 mGetRankInfo(RankType, MyKey, Cnt, Page, PageInfo) ->
@@ -105,14 +106,13 @@ mGetRankInfo(RankType, MyKey, Cnt, Page, PageInfo) ->
    SelfRank =
       case Page of
          0 ->
-            case ets:lookup_element(etsRankInfo, MyKey) of
-               [RankRecord] ->
-                  RankPos = ?ranksCfg:getV(RankType),
-                  CurScore = element(RankPos, RankRecord),
-                  MyIndex = ets:select_count(RankType, [{{'$1', '$2'}, [{'>=', '$1', CurScore}], [true]}]),
-                  max(RankLimit, MyIndex);
-               _ ->
-                  -1
+            RankPos = ?ranksCfg:getV(RankType),
+            try ets:lookup_element(?etsRankInfo, MyKey, RankPos) of
+               CurScore ->
+                  MyIndex = ets:select_count(RankType, [{{'$1', '$2'}, [{'>=', '$1', {const, CurScore}}], [true]}]),
+                  ?IIF(MyIndex > RankLimit, -1, MyIndex)
+            catch _:_ ->
+               -1
             end;
          _ ->
             0
@@ -129,9 +129,8 @@ mGetRankInfo(RankType, MyKey, Cnt, Page, PageInfo) ->
                KeyTerm when KeyTerm == <<"">>; KeyTerm == "" ->
                   [{'$1', [], ['$1']}];
                KeyTerm ->
-                  % ets:fun2ms(fun({K, _V} = T) when K < KeyTerm -> T end)
-                  [{{'$1', '$2'}, [{'<', '$1', KeyTerm}], ['$_']}]
-            catch _C:_R ->
+                  [{{'$1', '$2'}, [{'<', '$1', {const, KeyTerm}}], ['$_']}]
+            catch _:_ ->
                [{'$1', [], ['$1']}]
             end
       end,
@@ -167,10 +166,10 @@ makeRankData([], _Idx, LastKey, Acc) ->
       _ ->
          {erlang:term_to_binary(LastKey), lists:reverse(Acc)}
    end;
-makeRankData([{CurKey, Score} | KeyIds], Idx, LastKey, Acc) ->
-   case ets:lookup(ets_pub_rank_info, CurKey) of
-      [OneData] ->
-         makeRankData(KeyIds, Idx + 1, CurKey, [#rankInfo{rank = Idx, key = CurKey, publicInfo = element(?publicInfoPos, OneData), rankTypeScore = Score} | Acc]);
-      _ ->
-         makeRankData(KeyIds, Idx, LastKey, Acc)
+makeRankData([{Score, CurKey} | KeyIds], Idx, LastKey, Acc) ->
+   try ets:lookup_element(?etsRankInfo, CurKey, ?publicInfoPos) of
+      PublicInfo ->
+         makeRankData(KeyIds, Idx + 1, CurKey, [#rankInfo{rank = Idx, key = CurKey, publicInfo = PublicInfo, rankTypeScore = Score} | Acc])
+   catch _:_ ->
+      makeRankData(KeyIds, Idx, LastKey, Acc)
    end.
