@@ -7,7 +7,7 @@
    , stop/0
    , startWork/1             %% 创建指定数量的排行榜工作者
    , initRank/3              %% 创建新的类型排行榜
-   , updateScore/3           %% 更新某类型的排行榜分数
+   , updateScore/3           %% 更新某类型的排行榜分数 todo 这里可能差个第一次插入的接口函数
    , updateInfo/2            %% 更新公共信息
    , getRankInfo/5           %% 获取排行某页的信息
 ]).
@@ -51,7 +51,7 @@ updateScore(RankType, Key, Score) ->
    WorkName = ?ranksCfg:getV(erlang:phash2(Key, ?ranksCfg:getV(?workCnt))),
    %% 这里就看业务层面是否需要同步更新分数了
    %% 同步请求
-   %%  gen_srv:clfn(WorkName, rank_work, mUpdateScore, [Key, RankPos, Score]),
+   % gen_srv:clfn(WorkName, rankWork, mUpdateScore, [RankType, Key, Score], 1000000000).
    %% 异步请求
    gen_srv:csfn(WorkName, rankWork, mUpdateScore, [RankType, Key, Score]).
 

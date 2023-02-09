@@ -22,10 +22,12 @@
    , publicInfo :: term()
    , rankType1Score :: term()
    , rankType2Score :: term()
+   , rankType3Score :: term()
+   , rankType4Score :: term()
    , rankTypeNScore :: term()
 }).
 
--define(AllRankType, [rankType1Score, rankType2Score, rankTypeNScore]).
+-define(AllRankType, [rankType1Score, rankType2Score, rankTypeNScore, rankType3Score, rankType4Score]).
 
 -record(rankInfo, {
    rank :: integer()
