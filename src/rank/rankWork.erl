@@ -110,7 +110,7 @@ mGetRankInfo(RankType, MyKey, Cnt, Page, PageInfo) ->
             try ets:lookup_element(?etsRankInfo, MyKey, RankPos) of
                CurScore ->
                   MyIndex = ets:select_count(RankType, [{{'$1', '$2'}, [{'>=', '$1', {const, CurScore}}], [true]}]),
-                  ?IIF(MyIndex > RankLimit, -1, MyIndex)
+                  ?CASE(MyIndex > RankLimit, -1, MyIndex)
             catch _:_ ->
                -1
             end;
